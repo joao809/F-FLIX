@@ -1,0 +1,35 @@
+    <script>
+        const SUPABASE_URL = 'https://h7wt5ugpusdueiyzhl7aylx0vjsm.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_6HvZ91Hz5zow1qSjYUqE8g_VCC0XV-2';
+        
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        document.getElementById('admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Pegando os valores dos inputs
+            const title = document.getElementById('title').value;
+            const type = document.getElementById('type').value;
+            const category = document.getElementById('category').value;
+            const synopsis = document.getElementById('synopsis').value;
+            const poster_url = document.getElementById('poster_url').value;
+            const banner_url = document.getElementById('banner_url').value;
+            const video_url = document.getElementById('video_url').value;
+
+            try {
+                const { data, error } = await _supabase.from('contents').insert([
+                    { title, type, category, synopsis, poster_url, banner_url, video_url }
+                ]);
+
+                if (error) {
+                    alert('Erro do Supabase: ' + error.message);
+                } else {
+                    alert('Conteúdo cadastrado com sucesso!');
+                    document.getElementById('admin-form').reset();
+                }
+            } catch (err) {
+                alert('Erro de conexão ou rede instável. Verifique sua internet.');
+                console.error(err);
+            }
+        });
+    </script>
