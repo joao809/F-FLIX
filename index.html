@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamApp Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #141414; color: #fff; padding-bottom: 50px; overflow-x: hidden; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px 4%; background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent); position: fixed; top: 0; width: 100%; z-index: 1000; }
+        .logo { color: #E50914; font-size: 26px; font-weight: bold; letter-spacing: 1px; }
+        
+        .banner { height: 55vh; background: linear-gradient(to top, #141414, transparent), url('https://via.placeholder.com/1200x600') no-repeat center center/cover; display: flex; align-items: flex-end; padding: 40px 4%; }
+        .banner-content h1 { font-size: 2.2rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
+        .banner-content p { font-size: 0.95rem; max-width: 600px; margin-bottom: 20px; color: #ddd; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        
+        .btn-play { background-color: #fff; color: #000; border: none; padding: 12px 30px; font-size: 1rem; font-weight: bold; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        .btn-play:focus, .btn-play:hover { background-color: #E50914; color: #fff; outline: 3px solid #fff; }
+
+        .category-section { padding: 15px 4%; }
+        .category-section h2 { font-size: 1.2rem; margin-bottom: 12px; color: #e5e5e5; text-transform: uppercase; }
+        .movies-row { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; scroll-behavior: smooth; }
+        .movies-row::-webkit-scrollbar { height: 4px; }
+        .movies-row::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+
+        /* Suporte a Smart TV / Controle Remoto e Mobile */
+        .movie-card { min-width: 130px; width: 130px; height: 195px; border-radius: 6px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; background: #222; border: 2px solid transparent; flex-shrink: 0; }
+        .movie-card img { width: 100%; height: 100%; object-fit: cover; }
+        .movie-card:focus, .movie-card:hover { transform: scale(1.1); border-color: #fff; box-shadow: 0 0 15px rgba(229, 9, 20, 0.8); outline: none; }
+
+        /* Player Estilo Netflix */
+        #player-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; justify-content: center; align-items: center; }
+        #player-modal video { width: 100%; height: 100%; object-fit: contain; }
+        .netflix-controls { position: absolute; bottom: 30px; display: flex; gap: 20px; align-items: center; background: rgba(0,0,0,0.6); padding: 15px 30px; border-radius: 8px; }
+        .netflix-controls button { background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .netflix-controls button:hover, .netflix-controls button:focus { background: #E50914; outline: none; }
+        .close-player { position: absolute; top: 20px; right: 30px; background: #E50914; color: #fff; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">STREAMPRO</div>
+    </header>
+
+    <div class="banner">
+        <div class="banner-content">
+            <h1 id="banner-title">Carregando...</h1>
+            <p id="banner-synopsis">Aguarde...</p>
+            <button class="btn-play" id="banner-btn" tabindex="0">▶ Assistir</button>
+        </div>
+    </div>
+
+    <div id="categorias-container"></div>
+
+    <!-- Player Modal Estilo Netflix -->
+    <div id="player-modal">
+        <button class="close-player" onclick="fecharPlayer()" tabindex="0">✕ Voltar</button>
+        <video id="video-player" controls autoplay></video>
+        <div class="netflix-controls">
+            <button onclick="mudarTempo(-10)" tabindex="0">⏪ -10s</button>
+            <button onclick="mudarTempo(10)" tabindex="0">+10s ⏩</button>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://h7wt5ugpusdueiyzhl7aylx0vjsm.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_6HvZ91Hz5zow1qSjYUqE8g_VCC0XV-2';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let videoAtualUrl = '';
+
+        async function carregarCatalogo() {
+            const container = document.getElementById('categorias-container');
+            container.innerHTML = '';
+
+            const { data: contents, error } = await _supabase.from('contents').select('*');
+
+            if (error || !contents || contents.length === 0) {
+                document.getElementById('banner-title').innerText = 'Nenhum conteúdo encontrado';
+                document.getElementById('banner-synopsis').innerText = 'Adicione filmes pelo seu painel administrativo.';
+                return;
+            }
+
+            // Destaque principal
+            document.getElementById('banner-title').innerText = contents[0].title;
+            document.getElementById('banner-synopsis').innerText = contents[0].synopsis || 'Sem sinopse.';
+            videoAtualUrl = contents[0].video_url;
+            if(contents[0].banner_url) {
+                document.querySelector('.banner').style.backgroundImage = `linear-gradient(to top, #141414, transparent), url('${contents[0].banner_url}')`;
+            }
+            document.getElementById('banner-btn').onclick = () => abrirPlayer(contents[0].video_url);
+
+            // Categorias
+            const categorias = [...new Set(contents.map(item => item.category))];
+
+            categorias.forEach(cat => {
+                const filmesCat = contents.filter(item => item.category === cat);
+                let section = document.createElement('div');
+                section.className = 'category-section';
+                section.innerHTML = `<h2>${cat.toUpperCase()}</h2><div class="movies-row" id="row-${cat}"></div>`;
+                container.appendChild(section);
+
+                let row = document.getElementById(`row-${cat}`);
+                filmesCat.forEach(filme => {
+                    let card = document.createElement('div');
+                    card.className = 'movie-card';
+                    card.tabIndex = 0;
+                    card.innerHTML = `<img src="${filme.poster_url}" alt="${filme.title}">`;
+                    card.onclick = () => abrirPlayer(filme.video_url);
+                    row.appendChild(card);
+                });
+            });
+        }
+
+        function abrirPlayer(url) {
+            videoAtualUrl = url;
+            const modal = document.getElementById('player-modal');
+            const video = document.getElementById('video-player');
+            video.src = url;
+            modal.style.display = 'flex';
+            video.play();
+        }
+
+        function fecharPlayer() {
+            const modal = document.getElementById('player-modal');
+            const video = document.getElementById('video-player');
+            video.pause();
+            video.src = '';
+            modal.style.display = 'none';
+        }
+
+        function mudarTempo(segundos) {
+            const video = document.getElementById('video-player');
+            video.currentTime += segundos;
+        }
+
+        carregarCatalogo();
+    </script>
+</body>
+</html>
